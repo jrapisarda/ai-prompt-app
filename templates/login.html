@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Login</title>
+
+  <!-- new line 👇 -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+
+  <!-- new wrapper 👇 -->
+  <div class="auth-card">
+    <h2>Login</h2>
+
+    <form method="post">
+      <label>User
+        <input name="username" required>
+      </label>
+	  
+	  <label>Email
+		<input name="email" type="email" required>
+	  </label>
+
+      <label>Pass
+        <input name="password" type="password" required>
+      </label>
+
+      <button>Login</button>
+    </form>
+
+    <p>No account? <a href="{{ url_for('register') }}">Register</a></p>
+
+    {% with msgs = get_flashed_messages() %}
+      {% if msgs %}
+        <div class="flash-error">{{ msgs[0] }}</div>
+      {% endif %}
+    {% endwith %}
+  </div>
+
+</body>
+</html>
