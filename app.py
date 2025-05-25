@@ -7,6 +7,33 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, logout_user, \
                         login_required, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
+
+import os, datetime as dt
+from dotenv import load_dotenv
+from flask import Flask, request, jsonify, render_template, redirect, url_for, flash
+
+import chromadb
+from chromadb.config import Settings
+from chromadb.utils.embedding_functions import OpenAIEmbeddingFunction  # NEW
+
+# ── env vars ────────────────────────────────────────────────────────────
+load_dotenv()                      # make sure .env is read *before* we look up the key
+
+# ── Chroma  OpenAI embeddings ──────────────────────────────────────────
+embed_fn = OpenAIEmbeddingFunction(          # OpenAI is the embedding model
+    api_key=os.getenv("OPENAI_API_KEY"),     # set in your .env
+    model_name="text-embedding-3-small"      # cheapest model that’s still good
+)
+
+# Initialize ChromaDB client (local/embedded)
+#chroma_client = chromadb.Client(Settings(persist_directory="./chroma_data"        # disk path to keep vectors
+chroma_client = chromadb.PersistentClient(path="./chroma_data")
+
+# Create (or fetch) the shared collection with the embedding function
+collection = chroma_client.get_or_create_collection(
+    "my_collection", embedding_function=embed_fn
+)
+
 import openai
 
 # ── config ────────────────────────────────────────────────────────────────
@@ -100,6 +127,26 @@ def ask():
             input=prompt
         )
         answer = response.output_text.strip() if hasattr(response, "output_text") else response.choices[0].message.content.strip()
+        
+                # ── NEW: save to Chroma ───────────────────────────────
+        uid = f"{current_user.id}-{int(dt.datetime.utcnow().timestamp()*1000)}"
+        collection.add(
+            documents=[prompt + "\n\n" + answer],
+            ids=[uid],
+            metadatas=[{
+                "user_id": current_user.id,
+                "ts": dt.datetime.utcnow().isoformat()
+            }]
+        )
+        #chroma_client.persist()           # flushes to ./chroma_data
+        # ─────────────────────────────────────────────────────
+
+        db.session.add(QueryLog(
+            user_id=current_user.id, prompt=prompt, response=answer
+        ))
+        db.session.commit()
+
+        return jsonify({"response": answer})
 
         db.session.add(QueryLog(
             user_id=current_user.id, prompt=prompt, response=answer
