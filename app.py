@@ -157,6 +157,35 @@ def ask():
     except Exception as e:
         app.logger.exception("OpenAI call failed")
         return jsonify({"error": str(e)}), 500
+        
+@app.route("/semantic_search",methods=["POST"])
+@login_required
+def semantic_search():
+    data = request.json
+    query = data.get("query", "").strip()
+    if not query:
+        return jsonify({"error": "No query provided"}), 400
+    
+    # Number of results to return
+    top_k = int(data.get("top_k", 3))
+
+    # Run ChromaDB semantic query
+    result = collection.query(
+        query_texts=[query],
+        n_results=top_k,
+        include=['documents', 'metadatas']
+    )
+
+    hits = []
+    for doc, meta, id in zip(result['documents'][0], result['metadatas'][0], result['ids'][0]):
+        hits.append({
+            "id": id,
+            "text": doc,
+            "meta": meta
+        })
+
+    return jsonify({"results": hits})
+
 
 @app.get("/dashboard")
 @login_required

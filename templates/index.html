@@ -71,6 +71,16 @@
 </head>
 <body>
   <div class="container">
+  <div style="margin-bottom: 16px; display: flex; gap: 16px;">
+  <label>
+    <input type="radio" name="queryMode" id="normalMode" value="normal" checked>
+    AI Query
+  </label>
+  <label>
+    <input type="radio" name="queryMode" id="semanticMode" value="semantic">
+    Semantic Search
+  </label>
+</div>
     <div class="query-label">Ask the AI anything:</div>
     <input type="text" id="prompt" class="query-input" placeholder="Type your question here..." autofocus>
     <button class="send-btn" onclick="submitPrompt()">Send</button>
@@ -88,32 +98,57 @@
 <script>
   const chatHistory = [];
 
-  async function submitPrompt() {
-    const promptInput = document.getElementById('prompt');
-    const prompt = promptInput.value.trim();
-    if (!prompt) return;
-    promptInput.value = ""; // clear input box
-    // Show user's question in history
-    chatHistory.push({ role: "user", text: prompt });
-    renderChat();
+async function submitPrompt() {
+  const promptInput = document.getElementById('prompt');
+  const prompt = promptInput.value.trim();
+  if (!prompt) return;
+  promptInput.value = ""; // clear input box
+  chatHistory.push({ role: "user", text: prompt });
+  renderChat();
 
-    // Show AI is thinking...
-    chatHistory.push({ role: "ai", text: "Thinking..." });
-    renderChat();
+  chatHistory.push({ role: "ai", text: "Thinking..." });
+  renderChat();
 
-    // Fetch AI response
-    const res = await fetch('/ask', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({prompt})
-    });
-    const data = await res.json();
+  // NEW: Check which radio is selected
+  const isSemantic = document.getElementById('semanticMode').checked;
 
-    // Replace "Thinking..." with actual response
+  let res, data;
+  try {
+    if (isSemantic) {
+      res = await fetch('/semantic_search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: prompt })
+      });
+      data = await res.json();
+      chatHistory.pop();
+      if (data.results && data.results.length > 0) {
+        // Show all results, separated for clarity
+        let results = data.results.map(r => r.text).join("\n\n---\n\n");
+        chatHistory.push({ role: "ai", text: "Semantic Search Results:\n\n" + results });
+      } else if (data.error) {
+        chatHistory.push({ role: "ai", text: "Error: " + data.error });
+      } else {
+        chatHistory.push({ role: "ai", text: "No results found." });
+      }
+    } else {
+      res = await fetch('/ask', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt })
+      });
+      data = await res.json();
+      chatHistory.pop();
+      chatHistory.push({ role: "ai", text: data.response || data.error || "No response." });
+    }
+  } catch (err) {
     chatHistory.pop();
-    chatHistory.push({ role: "ai", text: data.response || data.error || "No response." });
-    renderChat();
+    chatHistory.push({ role: "ai", text: "An error occurred. See console." });
+    console.error("submitPrompt error:", err);
   }
+  renderChat();
+}
+
 
   function renderChat() {
     const responseDiv = document.getElementById('response');
@@ -132,6 +167,7 @@
   document.getElementById('prompt').addEventListener('keyup', function(e) {
     if (e.key === 'Enter') submitPrompt();
   });
+
 </script>
 
 </body>
